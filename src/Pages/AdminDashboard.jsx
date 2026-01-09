@@ -504,7 +504,7 @@ const AdminDashboard = () => {
                     top: 0,
                     left: 0,
                     right: 0,
-                    height: "3px",
+                    // height: "3px",
                     background: stat.gradient,
                     opacity: 0,
                     transition: "opacity 0.4s ease",
