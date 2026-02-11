@@ -74,13 +74,13 @@ export const deleteCarouselSlide = (id) =>
 //   });
 // };
 
-export const uploadCarouselImage = (formData) =>
-  Clients.post("/admin/Carousel/upload-image", formData, {
-    headers: {
-      ...adminHeader(),
-      "Content-Type": "multipart/form-data",   // 🔥 IMPORTANT
-    },
-  });
+// export const uploadCarouselImage = (formData) =>
+//   Clients.post("/admin/Carousel/upload-image", formData, {
+//     headers: {
+//       ...adminHeader(),
+//       "Content-Type": "multipart/form-data",   // 🔥 IMPORTANT
+//     },
+//   });
 
 
 export const getBookingStats = () => {
@@ -109,23 +109,25 @@ export const createBlog = (data) =>
 export const updateBlog = (id, data) =>
   Clients.put(`/admin/blogs/${id}`, data, { headers: adminHeader() });
 
+
 export const deleteBlog = (id) =>
   Clients.delete(`/admin/blogs/${id}`, { headers: adminHeader() });
 
 // 🔥 Blog Image Upload
-export const uploadBlogImage = (formData) =>
-  Clients.post("/admin/blogs/upload-image", formData, {
-    headers: {
-      ...adminHeader(),
-      "Content-Type": "multipart/form-data",
-    },
-  });
+// export const uploadBlogImage = (formData) =>
+//   Clients.post("/admin/blogs/upload-image", formData, {
+//     headers: {
+//       ...adminHeader(),
+//       "Content-Type": "multipart/form-data",
+//     },
+//   });
 
   
-export const uploadGalleryImage = (formData) =>
-  Clients.post("/admin/gallery/upload", formData, {
-    headers: { ...adminHeader(), "Content-Type": "multipart/form-data" },
-  });
+  
+// export const uploadGalleryImage = (formData) =>
+//   Clients.post("/admin/gallery/upload", formData, {
+//     headers: { ...adminHeader(), "Content-Type": "multipart/form-data" },
+//   });
 
 export const getAdminGalleryImage = () =>
   Clients.get("/admin/gallery", { headers: adminHeader() });

@@ -58,7 +58,7 @@ const AdminContacts = () => {
                 <Wrench className="absolute inset-0 m-auto text-blue-600 animate-pulse" size={24} />
               </div>
               <p className="text-sm font-medium text-slate-600 animate-pulse">
-                Loading services...
+                Loading Contact Messages...
               </p>
             </div>
           </div>

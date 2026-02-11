@@ -13,26 +13,32 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   Switch,
   FormControlLabel,
   Stack,
-  CircularProgress,
+  TextField,
 } from "@mui/material";
+
 import { Edit, Delete, Add } from "@mui/icons-material";
+
 import {
   getCarouselAdmin,
   createCarouselSlide,
   updateCarouselSlide,
   deleteCarouselSlide,
-  uploadCarouselImage,
 } from "../Services/AdminApi";
+
+import { UploadToCloudinary } from "../utils/UploadToCloudinary";
+
+import toast from "react-hot-toast";
 import { Wrench } from "lucide-react";
+
 
 const emptyForm = {
   title: "",
   subtitle: "",
   imageUrl: "",
+  publicId: "",
   buttonText: "",
   buttonLink: "",
   sortOrder: 0,
@@ -40,17 +46,20 @@ const emptyForm = {
 };
 
 const AdminCarousel = () => {
+
   const [slides, setSlides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState(emptyForm);
   const [open, setOpen] = useState(false);
-  const [editingSlide, setEditingSlide] = useState(null);
+  const [editing, setEditing] = useState(null);
 
+  const [form, setForm] = useState(emptyForm);
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState("");
 
-  // ---------------- LOAD SLIDES ----------------
+
+
+  // 🔥 LOAD
   const loadSlides = async () => {
     try {
       setLoading(true);
@@ -67,370 +76,346 @@ const AdminCarousel = () => {
     loadSlides();
   }, []);
 
-  // ---------------- OPEN DIALOGS ----------------
-  const handleOpenAdd = () => {
-    setEditingSlide(null);
+
+
+
+  // 🔥 ADD
+  const handleAdd = () => {
+    setEditing(null);
     setForm(emptyForm);
     setSelectedFile(null);
     setPreview("");
     setOpen(true);
   };
 
-  const handleOpenEdit = (slide) => {
-    setEditingSlide(slide);
+
+
+  // 🔥 EDIT
+  const handleEdit = (slide) => {
+
+    setEditing(slide);
+
     setForm({
-      title: slide.title || "",
-      subtitle: slide.subtitle || "",
-      imageUrl: slide.imageUrl || "",
-      buttonText: slide.buttonText || "",
-      buttonLink: slide.buttonLink || "",
-      sortOrder: slide.sortOrder ?? 0,
-      isActive: slide.isActive ?? true,
+      title: slide.title,
+      subtitle: slide.subtitle,
+      imageUrl: slide.imageUrl,
+      publicId: slide.publicId,
+      buttonText: slide.buttonText,
+      buttonLink: slide.buttonLink,
+      sortOrder: slide.sortOrder,
+      isActive: slide.isActive,
     });
+
+    setPreview(slide.imageUrl);
     setSelectedFile(null);
-    setPreview(slide.imageUrl || "");
     setOpen(true);
   };
 
-  const handleClose = () => {
-    if (saving) return;
-    setOpen(false);
-  };
 
-  // ---------------- FORM HANDLERS ----------------
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: name === "sortOrder" ? Number(value) : value,
-    }));
-  };
 
-  const handleToggleActive = (e) => {
-    setForm((prev) => ({
-      ...prev,
-      isActive: e.target.checked,
-    }));
-  };
-
+  // 🔥 FILE SELECT
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setSelectedFile(file);
     setPreview(URL.createObjectURL(file));
   };
 
-  // ---------------- SUBMIT ----------------
- const handleSubmit = async (e) => {
-  e.preventDefault();
 
-  // ✅ Title required
-  if (!form.title.trim()) {
-    alert("Title is required");
-    return;
-  }
 
-  // ✅ Add mode: image must be selected ya existing url
-  if (!editingSlide && !selectedFile && !form.imageUrl) {
-    alert("Please choose an image");
-    return;
-  }
+  // 🔥 SAVE (Cloudinary Logic)
+  const handleSubmit = async () => {
 
-  try {
-    setSaving(true);
-
-    let finalImageUrl = form.imageUrl;
-
-    // 🔹 1) Agar new file select hui hai → backend par upload karo
-    if (selectedFile) {
-      const fd = new FormData();
-      fd.append("image", selectedFile); // field name "image" backend ke multer se match kare
-
-      const res = await uploadCarouselImage(fd);
-      // API ka response jaisa hai uske hisaab se use karo:
-      // Example: { imageUrl: "http://localhost:5000/uploads/carousel/xyz.jpg" }
-      finalImageUrl = res.data?.imageUrl || res.imageUrl || finalImageUrl;
+    if (!form.title) {
+      toast.error("Title is required");
+      return;
     }
 
-    // 🔹 2) Payload banao
-    const payload = {
-      ...form,
-      sortOrder: Number(form.sortOrder) || 0,
-      imageUrl: finalImageUrl,
-    };
-
-    // 🔹 3) Create ya Update API call
-    if (editingSlide) {
-      await updateCarouselSlide(editingSlide._id, payload);
-    } else {
-      await createCarouselSlide(payload);
+    if (!selectedFile && !form.imageUrl) {
+      toast.error("Image is required");
+      return;
     }
-
-    // 🔹 4) Dialog close + list refresh
-    setOpen(false);
-    await loadSlides();
-  } catch (err) {
-    console.error("Save carousel error:", err?.response?.data || err);
-    alert("Error while saving slide");
-  } finally {
-    setSaving(false);
-  }
-};
-
-  // ---------------- DELETE ----------------
-  const handleDelete = async (slide) => {
-    const ok = window.confirm(`Delete slide: "${slide.title}" ?`);
-    if (!ok) return;
 
     try {
-      await deleteCarouselSlide(slide._id);
-      await loadSlides();
+
+      setSaving(true);
+
+      let imageUrl = form.imageUrl;
+      let publicId = editing?.publicId || null;
+
+      // ⭐ Upload to Cloudinary
+      if (selectedFile) {
+
+        const cloudRes = await UploadToCloudinary(
+          selectedFile,
+          "carousel" // folder name
+        );
+
+        imageUrl = cloudRes.secure_url;
+        publicId = cloudRes.public_id;
+      }
+
+      const payload = {
+        ...form,
+        imageUrl,
+        publicId,
+      };
+
+      // ⭐ replace old image
+      if (editing && selectedFile) {
+        payload.oldPublicId = editing.publicId;
+      }
+
+      if (editing) {
+
+        await updateCarouselSlide(editing._id, payload);
+        toast.success("Slide updated successfully ✅");
+
+      } else {
+
+        await createCarouselSlide(payload);
+        toast.success("Slide created successfully ✅");
+      }
+
+      setOpen(false);
+      loadSlides();
+
     } catch (err) {
-      console.error("Delete carousel error:", err);
-      alert("Error while deleting slide");
+
+      console.error("Save carousel error:", err);
+      toast.error("Error saving slide ❌");
+
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ---------------- UI ----------------
+
+
+
+  // 🔥 DELETE
+  const handleDelete = async (slide) => {
+
+    const ok = window.confirm("Delete this slide?");
+    if (!ok) return;
+
+    try {
+
+      await deleteCarouselSlide(slide._id);
+
+      toast.success("Slide deleted successfully");
+      loadSlides();
+
+    } catch (err) {
+
+      console.error("Delete carousel error:", err);
+      toast.error("Delete failed ❌");
+    }
+  };
+
+
+
+  // ================= UI =================
+
   return (
     <>
-      <Typography variant="h5" gutterBottom marginLeft={2} marginTop={1}>
-        Home Carousel
+      <Typography sx={{ m: 2 }} variant="h5">
+        Carousel Management
       </Typography>
 
-      <Stack direction="row" justifyContent="space-between" mb={2}>
-        <Typography variant="body2" marginLeft={2} color="text.secondary">
-          Manage Home Page Banners (Dynamic Carousel).
-        </Typography>
-        <Button variant="contained" onClick={handleOpenAdd}>
-                            <Add /> Add Slide
-        </Button>
-      </Stack>
+      <Button
+        variant="contained"
+        startIcon={<Add />}
+        onClick={handleAdd}
+        sx={{ ml: 2, mb: 2 }}
+      >
+        Add Slide
+      </Button>
 
       {loading ? (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50">
-        <div className="text-center">
-          <div className="relative mx-auto mb-4 h-16 w-16">
-            <div className="absolute inset-0 rounded-full border-4 border-blue-200"></div>
-            <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-600"></div>
-            <Wrench className="absolute inset-0 m-auto text-blue-600 animate-pulse" size={24} />
-          </div>
-          <p className="text-sm font-medium text-slate-600 animate-pulse">
-            Loading services...
-          </p>
-        </div>
-      </div>
+                <div className="text-center">
+                  <div className="relative mx-auto mb-4 h-16 w-16">
+                    <div className="absolute inset-0 rounded-full border-4 border-blue-200"></div>
+                    <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-blue-600"></div>
+                    <Wrench className="absolute inset-0 m-auto text-blue-600 animate-pulse" size={24} />
+                  </div>
+                  <p className="text-sm font-medium text-slate-600 animate-pulse">
+                    Loading Carousel...
+                  </p>
+                </div>
+              </div>   
       ) : (
         <Paper>
-          <Table size="small"
-          sx={{
-      "& th": {
-        px: 3,
-        py: 1.5,
-        fontWeight: "bold",
-        backgroundColor: "#e5e7eb",
-      },
-      "& td": {
-        px: 2,
-        py: 1,
-      },
-      "& tbody tr:hover": {
-        backgroundColor: "#f0fdf4",
-      },
-    }}
-          >
+          <Table>
+
             <TableHead>
-              <TableRow className="bg-gray-300">
-                <TableCell>S. No</TableCell>
+              <TableRow>
+                <TableCell align="center">S.No</TableCell>
                 <TableCell>Preview</TableCell>
                 <TableCell>Title</TableCell>
-                <TableCell>Subtitle</TableCell>
-                <TableCell>Button</TableCell>
                 <TableCell>Order</TableCell>
-                <TableCell>Active</TableCell>
+                <TableCell>Status</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody className="bg-white">
+
+            <TableBody>
+
               {slides.map((slide, index) => (
+
                 <TableRow key={slide._id}>
                   <TableCell align="center">{index + 1}</TableCell>
+
                   <TableCell>
-                    {slide.imageUrl ? (
-                      <img
-                        src={slide.imageUrl}
-                        alt={slide.title}
-                        style={{
-                          width: 80,
-                          height: 45,
-                          objectFit: "cover",
-                          borderRadius: 6,
-                        }}
-                      />
-                    ) : (
-                      "-"
-                    )}
+                    <img
+                      src={slide.imageUrl}
+                      alt="carousel"
+                      style={{
+                        width: 90,
+                        height: 55,
+                        objectFit: "cover",
+                        borderRadius: 6,
+                      }}
+                    />
                   </TableCell>
+
                   <TableCell>{slide.title}</TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      noWrap
-                      sx={{ maxWidth: 200 }}
-                    >
-                      {slide.subtitle}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {slide.buttonText ? (
-                      <>
-                        {slide.buttonText}
-                        <Typography
-                          variant="caption"
-                          display="block"
-                          color="text.secondary"
-                        >
-                          {slide.buttonLink}
-                        </Typography>
-                      </>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
                   <TableCell>{slide.sortOrder}</TableCell>
-                  <TableCell>{slide.isActive ? "Yes" : "No"}</TableCell>
+                  <TableCell>
+                    {slide.isActive ? "Active" : "Inactive"}
+                  </TableCell>
+
                   <TableCell align="right">
-                    <IconButton
-                      onClick={() => handleOpenEdit(slide)}
-                      size="small"
-                    >
-                      <Edit fontSize="small" />
+
+                    <IconButton onClick={() => handleEdit(slide)}>
+                      <Edit />
                     </IconButton>
+
                     <IconButton
-                      onClick={() => handleDelete(slide)}
-                      size="small"
                       color="error"
+                      onClick={() => handleDelete(slide)}
                     >
-                      <Delete fontSize="small" />
+                      <Delete />
                     </IconButton>
+
                   </TableCell>
                 </TableRow>
               ))}
 
               {slides.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    No slides found. Click &quot;Add Slide&quot; to create one.
+                  <TableCell colSpan={6} align="center">
+                    No slides found
                   </TableCell>
                 </TableRow>
               )}
+
             </TableBody>
           </Table>
         </Paper>
       )}
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+
+
+      {/* 🔥 Dialog */}
+
+      <Dialog open={open} onClose={() => !saving && setOpen(false)} fullWidth>
+
         <DialogTitle>
-          {editingSlide ? "Edit Slide" : "Add New Slide"}
+          {editing ? "Edit Slide" : "Add Slide"}
         </DialogTitle>
+
         <DialogContent dividers>
-          <Stack spacing={2} mt={1}>
+
+          <Stack spacing={2}>
+
             <TextField
-              label="Title *"
-              name="title"
+              label="Title"
               value={form.title}
-              onChange={handleChange}
-              fullWidth
-              size="small"
+              onChange={(e) =>
+                setForm((p) => ({ ...p, title: e.target.value }))
+              }
             />
+
             <TextField
               label="Subtitle"
-              name="subtitle"
               value={form.subtitle}
-              onChange={handleChange}
-              fullWidth
-              size="small"
+              onChange={(e) =>
+                setForm((p) => ({ ...p, subtitle: e.target.value }))
+              }
             />
 
-            {/* Image upload */}
-            <div>
-              <Typography variant="subtitle2" gutterBottom>
-                Banner Image *
-              </Typography>
-              <Button variant="outlined" component="label" size="small">
-                Choose Image
-                <input
-                  hidden
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                />
-              </Button>
+            <Button variant="outlined" component="label">
+              Choose Image
+              <input hidden type="file" accept="image/*" onChange={handleFileChange} />
+            </Button>
 
-              {(preview || form.imageUrl) && (
-                <div style={{ marginTop: 8 }}>
-                  <img
-                    src={preview || form.imageUrl}
-                    alt="Preview"
-                    style={{
-                      width: "100%",
-                      maxHeight: 200,
-                      objectFit: "cover",
-                      borderRadius: 8,
-                      border: "1px solid #eee",
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            {preview && (
+              <img
+                src={preview}
+                alt="preview"
+                style={{
+                  width: "100%",
+                  maxHeight: 220,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                }}
+              />
+            )}
 
             <TextField
               label="Button Text"
-              name="buttonText"
               value={form.buttonText}
-              onChange={handleChange}
-              fullWidth
-              size="small"
-              placeholder="e.g. Book Now"
+              onChange={(e) =>
+                setForm((p) => ({ ...p, buttonText: e.target.value }))
+              }
             />
+
             <TextField
               label="Button Link"
-              name="buttonLink"
               value={form.buttonLink}
-              onChange={handleChange}
-              fullWidth
-              size="small"
-              placeholder="/booking"
+              onChange={(e) =>
+                setForm((p) => ({ ...p, buttonLink: e.target.value }))
+              }
             />
+
             <TextField
               label="Sort Order"
-              name="sortOrder"
               type="number"
               value={form.sortOrder}
-              onChange={handleChange}
-              size="small"
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  sortOrder: Number(e.target.value),
+                }))
+              }
             />
+
             <FormControlLabel
               control={
                 <Switch
                   checked={form.isActive}
-                  onChange={handleToggleActive}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, isActive: e.target.checked }))
+                  }
                 />
               }
               label="Active"
             />
+
           </Stack>
+
         </DialogContent>
+
         <DialogActions>
-          <Button onClick={handleClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} variant="contained" disabled={saving}>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSubmit} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
+
       </Dialog>
     </>
   );
